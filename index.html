@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#06090c" />
+  <title>DYNO LAB — Engine Tuning Simulator</title>
+  <meta name="description" content="A 3D engine tuning game. Build boost, chase ignition timing, watch EGT and knock on the dyno. Real metrics, real consequences." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23080b0e'/%3E%3Cpath d='M18 44V28h8V18h20v10h-8v8h8v8H34v-8h-8v8z' fill='%2343e8d0'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene" aria-label="3D garage with a car on a chassis dyno"></canvas>
+    <div class="scene-vignette" aria-hidden="true"></div>
+    <div class="scene-grain" aria-hidden="true"></div>
+
+    <!-- ============================== TOP BAR ============================== -->
+    <header id="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true">
+          <path d="M8 34V15l8-7 8 7v19h-6V20l-2-2-2 2v14z" fill="currentColor"/>
+          <path d="M28 34V22l4-4 4 4v12z" fill="currentColor" opacity=".55"/>
+          <path d="M6 37h32" stroke="currentColor" stroke-width="2" opacity=".5"/>
+        </svg>
+        <div class="brand-type">
+          <strong>DYNO<span>LAB</span></strong>
+          <small>ENGINE TUNING SIM</small>
+        </div>
+      </div>
+
+      <nav id="mainNav" aria-label="Main navigation">
+        <button class="nav-btn is-active" data-action="garage">GARAGE</button>
+        <button class="nav-btn" data-action="contracts">CONTRACTS</button>
+        <button class="nav-btn" data-action="shop">UPGRADES</button>
+        <button class="nav-btn nav-help" data-action="help" aria-label="How to play">?</button>
+      </nav>
+
+      <div class="top-stats">
+        <div class="stat">
+          <span>BANK</span>
+          <b id="cashDisplay">$3,000</b>
+        </div>
+        <div class="stat stat-rep">
+          <span id="levelLabel">LEVEL 1</span>
+          <b id="repDisplay">0 REP</b>
+        </div>
+        <button class="icon-btn" id="soundBtn" data-action="sound" aria-label="Mute sound">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="sound-wave" d="M16 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path class="sound-wave" d="M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".55"/><path class="sound-x" d="m16 9 5 6m0-6-5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ============================== HUD ============================== -->
+    <main id="hud">
+      <!-- LEFT RAIL -->
+      <aside id="leftRail">
+        <section class="panel contract-card" id="contractCard">
+          <div class="panel-kicker"><span class="live-dot"></span> ACTIVE CONTRACT</div>
+          <div class="contract-head">
+            <h2 id="contractName">Street Sweep</h2>
+            <span class="tag" id="contractTag">STREET</span>
+          </div>
+          <p class="client" id="contractClient">Maya / weekend warrior</p>
+          <div class="goal-row">
+            <div class="goal">
+              <span>TARGET POWER</span>
+              <b id="targetHp">300</b><em>WHP</em>
+            </div>
+            <div class="goal">
+              <span>TARGET TORQUE</span>
+              <b id="targetTq">260</b><em>LB-FT</em>
+            </div>
+          </div>
+          <ul class="constraints" id="constraintList">
+            <li data-constraint="egt"><i></i>EGT <b>≤ 920°C</b></li>
+            <li data-constraint="knock"><i></i>KNOCK <b>0 events</b></li>
+            <li data-constraint="fuel"><i></i>FUEL <b>91+ octane</b></li>
+          </ul>
+          <div class="contract-foot">
+            <div class="reward"><span>PAYOUT</span><b id="contractReward">$3,500</b></div>
+            <div class="contract-stars" id="contractStars" aria-label="0 of 3 stars">☆☆☆</div>
+          </div>
+          <button class="ghost-btn wide" data-action="contracts">ALL CONTRACTS <span>→</span></button>
+        </section>
+
+        <section class="panel gauge-panel" id="gaugePanel">
+          <div class="panel-kicker">LIVE TELEMETRY <span id="telemetryState">IDLE</span></div>
+          <div class="gauge-grid">
+            <div class="gauge" data-gauge="rpm">
+              <svg viewBox="0 0 80 80" aria-hidden="true">
+                <circle class="g-track" cx="40" cy="40" r="31"/>
+                <circle class="g-fill" cx="40" cy="40" r="31"/>
+              </svg>
+              <div class="g-read"><b id="gaugeRpm">900</b><span>RPM</span></div>
+              <small>ENGINE</small>
+            </div>
+            <div class="gauge" data-gauge="boost">
+              <svg viewBox="0 0 80 80" aria-hidden="true">
+                <circle class="g-track" cx="40" cy="40" r="31"/>
+                <circle class="g-fill" cx="40" cy="40" r="31"/>
+              </svg>
+              <div class="g-read"><b id="gaugeBoost">0.0</b><span>PSI</span></div>
+              <small>BOOST</small>
+            </div>
+            <div class="gauge" data-gauge="egt">
+              <svg viewBox="0 0 80 80" aria-hidden="true">
+                <circle class="g-track" cx="40" cy="40" r="31"/>
+                <circle class="g-fill" cx="40" cy="40" r="31"/>
+              </svg>
+              <div class="g-read"><b id="gaugeEgt">320</b><span>°C</span></div>
+              <small>EGT</small>
+            </div>
+            <div class="gauge" data-gauge="afr">
+              <svg viewBox="0 0 80 80" aria-hidden="true">
+                <circle class="g-track" cx="40" cy="40" r="31"/>
+                <circle class="g-fill" cx="40" cy="40" r="31"/>
+              </svg>
+              <div class="g-read"><b id="gaugeAfr">12.2</b><span>AFR</span></div>
+              <small>MIXTURE</small>
+            </div>
+          </div>
+
+          <div class="margin-row">
+            <div class="margin-label">KNOCK MARGIN <b id="marginValue">+5.0°</b></div>
+            <div class="margin-bar"><span id="marginBar"></span></div>
+          </div>
+
+          <div class="health-row">
+            <div class="health-label">ENGINE HEALTH <b id="healthValue">100%</b></div>
+            <div class="health-bar"><span id="healthBar"></span></div>
+          </div>
+
+          <div class="knock-alert" id="knockAlert">KNOCK DETECTED <span id="knockCount">0</span></div>
+        </section>
+      </aside>
+
+      <!-- CENTER -->
+      <section id="centerStage">
+        <div id="cameraBar">
+          <button class="cam-btn is-active" data-cam="car">CAR</button>
+          <button class="cam-btn" data-cam="engine">ENGINE</button>
+          <button class="cam-btn" data-cam="dyno">REAR</button>
+          <span class="cam-hint">DRAG TO ORBIT · SCROLL TO ZOOM</span>
+        </div>
+
+        <div id="mobileTelemetry" aria-hidden="true">
+          <div><span>RPM</span><b id="mRpm">900</b></div>
+          <div><span>BOOST</span><b id="mBoost">0.0</b></div>
+          <div><span>EGT</span><b id="mEgt">320</b></div>
+          <div id="mKnock"><span>KNOCK</span><b>SAFE</b></div>
+        </div>
+
+        <div id="toast" class="toast" role="status"></div>
+
+        <section class="panel chart-panel" id="chartPanel">
+          <div class="chart-head">
+            <div class="panel-kicker">DYNO SHEET <span id="chartMode">PREDICTED</span></div>
+            <div class="chart-legend">
+              <span class="leg-hp"><i></i>POWER</span>
+              <span class="leg-tq"><i></i>TORQUE</span>
+              <span class="leg-ghost"><i></i>LAST PULL</span>
+            </div>
+          </div>
+          <canvas id="chart" aria-label="Horsepower and torque curves"></canvas>
+          <div class="chart-foot">
+            <span id="chartPeakHp">PEAK —</span>
+            <span id="chartPeakTq">TORQUE —</span>
+            <span id="chartPeakEgt">EGT —</span>
+            <span id="chartMargin" class="ok">MARGIN —</span>
+          </div>
+        </section>
+      </section>
+
+      <!-- RIGHT RAIL -->
+      <aside id="rightRail">
+        <section class="panel console" id="consolePanel">
+          <div class="console-head">
+            <div>
+              <div class="panel-kicker">WORKSTATION 01</div>
+              <h2>TUNE CONSOLE</h2>
+            </div>
+            <div class="console-tabs" role="tablist">
+              <button class="console-tab is-active" data-tab="tune" role="tab" aria-selected="true">TUNE</button>
+              <button class="console-tab" data-tab="shop" role="tab" aria-selected="false">SHOP</button>
+            </div>
+          </div>
+
+          <div id="tuneView" class="console-view">
+            <div class="spec-strip">
+              <div><span>TURBO</span><b id="specTurbo">STOCK IHI</b></div>
+              <div><span>FUEL</span><b id="specFuel">93 OCT</b></div>
+              <div><span>HEALTH</span><b id="specHealth">100%</b></div>
+            </div>
+
+            <div class="sliders" id="sliders">
+              <div class="slider-row" data-key="boost">
+                <div class="slider-top">
+                  <label for="boostSlider">BOOST TARGET</label>
+                  <div class="slider-val"><b id="boostVal">12.0</b><span>PSI</span></div>
+                </div>
+                <input type="range" id="boostSlider" min="0" max="18" step="0.5" value="12" aria-label="Boost target in PSI" />
+                <div class="slider-scale"><span>0</span><span id="boostMaxLabel">MAX 18</span></div>
+              </div>
+
+              <div class="slider-row" data-key="timing">
+                <div class="slider-top">
+                  <label for="timingSlider">IGNITION TIMING</label>
+                  <div class="slider-val"><b id="timingVal">17</b><span>° BTDC</span></div>
+                </div>
+                <input type="range" id="timingSlider" min="0" max="34" step="1" value="17" aria-label="Ignition timing in degrees before top dead centre" />
+                <div class="slider-scale"><span>RETARDED</span><span>AGGRESSIVE</span></div>
+              </div>
+
+              <div class="slider-row" data-key="afr">
+                <div class="slider-top">
+                  <label for="afrSlider">TARGET AFR</label>
+                  <div class="slider-val"><b id="afrVal">12.2</b><span>: 1</span></div>
+                </div>
+                <input type="range" id="afrSlider" min="10.8" max="14.2" step="0.1" value="12.2" aria-label="Air fuel ratio" />
+                <div class="slider-scale"><span>RICH / COOL</span><span>LEAN / HOT</span></div>
+              </div>
+
+              <div class="slider-row" data-key="cam">
+                <div class="slider-top">
+                  <label for="camSlider">CAM TIMING</label>
+                  <div class="slider-val"><b id="camVal">0</b><span>° ADV</span></div>
+                </div>
+                <input type="range" id="camSlider" min="-9" max="10" step="1" value="0" aria-label="Camshaft timing advance" />
+                <div class="slider-scale"><span>TOP END</span><span>LOW END</span></div>
+              </div>
+
+              <div class="slider-row" data-key="rev">
+                <div class="slider-top">
+                  <label for="revSlider">REV LIMITER</label>
+                  <div class="slider-val"><b id="revVal">7000</b><span>RPM</span></div>
+                </div>
+                <input type="range" id="revSlider" min="5500" max="9000" step="100" value="7000" aria-label="Rev limiter in RPM" />
+                <div class="slider-scale"><span>5500</span><span id="revSafeLabel">VALVETRAIN 7200</span></div>
+              </div>
+            </div>
+
+            <div class="fuel-block">
+              <span class="fuel-label">FUEL</span>
+              <div class="fuel-chips" id="fuelChips">
+                <button class="fuel-chip" data-fuel="91">91</button>
+                <button class="fuel-chip is-active" data-fuel="93">93</button>
+                <button class="fuel-chip" data-fuel="100">100</button>
+                <button class="fuel-chip" data-fuel="e85">E85</button>
+              </div>
+              <span class="fuel-cost" id="fuelCost">$48 / pull</span>
+            </div>
+
+            <div class="prediction" id="prediction">
+              <div class="pred-main">
+                <div><span>EST. POWER</span><b id="predHp">281</b><em>WHP</em></div>
+                <div><span>EST. TORQUE</span><b id="predTq">238</b><em>LB-FT</em></div>
+              </div>
+              <div class="pred-flags">
+                <span class="flag" id="predMargin">MARGIN +5.0°</span>
+                <span class="flag" id="predEgt">EGT 742°C</span>
+                <span class="flag" id="predRev">LIMIT 7000</span>
+              </div>
+              <div class="pred-warning" id="predWarning"></div>
+            </div>
+
+            <button id="runBtn" class="run-btn" data-action="run">
+              <span class="run-main">RUN DYNO PULL</span>
+              <span class="run-sub"><kbd>SPACE</kbd> TO LAUNCH · <b id="runCost">$48</b> FUEL</span>
+            </button>
+
+            <div class="tune-hint" id="tuneHint">
+              <span class="hint-icon">i</span>
+              <p id="tuneHintText">Add boost until knock margin gets tight. Richer AFR cools EGT. Watch both.</p>
+            </div>
+          </div>
+
+          <div id="shopView" class="console-view" hidden>
+            <div class="shop-top">
+              <div>
+                <span class="shop-cash-label">AVAILABLE</span>
+                <b id="shopCash">$3,000</b>
+              </div>
+              <div class="health-chip" id="shopHealth">ENGINE 100%</div>
+            </div>
+            <div class="shop-list" id="shopList"></div>
+            <button class="repair-btn" id="repairBtn" data-action="repair">REPAIR ENGINE <span id="repairCost">$0</span></button>
+            <p class="shop-note">Upgrades are permanent for this build. Repair restores lost power and knock resistance.</p>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <!-- ============================== PULL OVERLAY ============================== -->
+    <div id="pullHud" aria-hidden="true">
+      <div class="pull-status"><span class="rec-dot"></span> DYNO PULL IN PROGRESS</div>
+      <div class="pull-big">
+        <div class="pull-num"><b id="pullHp">0</b><span>WHP</span></div>
+        <div class="pull-rpm"><b id="pullRpm">1500</b><span>RPM</span></div>
+        <div class="pull-num"><b id="pullTq">0</b><span>LB-FT</span></div>
+      </div>
+      <div class="pull-sub"><span id="pullBoost">BOOST 0.0 PSI</span><span id="pullEgt">EGT 320°C</span><span id="pullTiming">TIMING 17°</span></div>
+      <button class="abort-btn" data-action="abort">ABORT PULL</button>
+    </div>
+
+    <!-- ============================== TITLE ============================== -->
+    <section id="titleScreen" class="screen">
+      <div class="title-glow" aria-hidden="true"></div>
+      <div class="title-inner">
+        <div class="title-eyebrow"><span></span> PRECISION TUNING SIMULATOR <span></span></div>
+        <h1>DYNO<span>LAB</span></h1>
+        <p class="title-tagline">REAL FUEL. REAL HEAT. <em>REAL CONSEQUENCES.</em></p>
+        <p class="title-copy">Strap a 2.0L turbo to the rollers. Chase boost, ignition and air–fuel ratio. Make the number before the pistons make a decision.</p>
+        <div class="title-chips">
+          <span><i></i>LIVE DYNO</span>
+          <span><i></i>KNOCK MARGIN</span>
+          <span><i></i>EGT / AFR</span>
+        </div>
+        <button id="startBtn" class="start-btn">START GAME</button>
+        <div class="title-foot">
+          <span>5 CONTRACTS</span><span>1 ENGINE</span><span>NO RESPAWNS</span>
+        </div>
+      </div>
+      <div class="title-corner tl"></div><div class="title-corner tr"></div>
+      <div class="title-corner bl"></div><div class="title-corner br"></div>
+      <div class="title-version">BUILD 1.0 / 2.0L I4 TURBO</div>
+    </section>
+
+    <!-- ============================== MODAL ROOT ============================== -->
+    <div id="modalRoot" class="hidden" aria-live="polite"></div>
+
+    <div id="rotateHint" class="hidden">DRAG TO ORBIT</div>
+    <div id="fatal" class="hidden">
+      <div>
+        <h2>WEBGL UNAVAILABLE</h2>
+        <p>DYNO LAB needs a WebGL-capable browser. Try Chrome, Edge, Firefox or Safari with hardware acceleration enabled.</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three.module.js",
+        "three/addons/": "./vendor/addons/"
+      }
+    }
+  </script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
